@@ -74,3 +74,6 @@ Various usages : ::
     success, result = bb.issue.comment.delete(comment_id=COMMENT_ID)
 
 """
+
+from .bitbucket import Bitbucket
+from . import exceptions

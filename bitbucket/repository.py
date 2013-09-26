@@ -2,23 +2,19 @@
 from tempfile import NamedTemporaryFile
 from zipfile import ZipFile
 
+from . import base, exceptions
 
-URLS = {
-    'CREATE_REPO': 'repositories/',
-    'GET_REPO': 'repositories/%(username)s/%(repo_slug)s/',
-    'UPDATE_REPO': 'repositories/%(username)s/%(repo_slug)s/',
-    'DELETE_REPO': 'repositories/%(username)s/%(repo_slug)s/',
-    # Get archive
-    'GET_ARCHIVE': 'repositories/%(username)s/%(repo_slug)s/%(format)s/master/',
-}
-
-
-class Repository(object):
+class Repository(base.Endpoint):
     """ This class provide repository-related methods to Bitbucket objects."""
 
-    def __init__(self, bitbucket):
-        self.bitbucket = bitbucket
-        self.bitbucket.URLS.update(URLS)
+    endpoints = {
+        'CREATE_REPO': 'repositories/',
+        'GET_REPO': 'repositories/%(username)s/%(repo_slug)s/',
+        'UPDATE_REPO': 'repositories/%(username)s/%(repo_slug)s/',
+        'DELETE_REPO': 'repositories/%(username)s/%(repo_slug)s/',
+        # Get archive
+        'GET_ARCHIVE': 'repositories/%(username)s/%(repo_slug)s/%(format)s/master/',
+    }
 
     def _get_files_in_dir(self, repo_slug=None, dir='/'):
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
@@ -29,7 +25,7 @@ class Repository(object):
             repo_slug=repo_slug,
             format='src')
         dir_url = url + dir
-        response = self.bitbucket.dispatch('GET', dir_url, auth=self.bitbucket.auth)
+        response = self.bitbucket.dispatch(dir_url, auth=self.bitbucket.auth)
         if response[0] and isinstance(response[1], dict):
             repo_tree = response[1]
             url = self.bitbucket.url(
@@ -53,7 +49,7 @@ class Repository(object):
         """
         username = username or self.bitbucket.username or ''
         url = self.bitbucket.url('GET_USER', username=username)
-        response = self.bitbucket.dispatch('GET', url)
+        response = self.bitbucket.dispatch(url)
         try:
             return (response[0], response[1]['repositories'])
         except TypeError:
@@ -63,7 +59,7 @@ class Repository(object):
     def all(self):
         """ Return own repositories."""
         url = self.bitbucket.url('GET_USER', username=self.bitbucket.username)
-        response = self.bitbucket.dispatch('GET', url, auth=self.bitbucket.auth)
+        response = self.bitbucket.dispatch(url, auth=self.bitbucket.auth)
         try:
             return (response[0], response[1]['repositories'])
         except TypeError:
@@ -74,18 +70,18 @@ class Repository(object):
         """ Get a single repository on Bitbucket and return it."""
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
         url = self.bitbucket.url('GET_REPO', username=self.bitbucket.username, repo_slug=repo_slug)
-        return self.bitbucket.dispatch('GET', url, auth=self.bitbucket.auth)
+        return self.bitbucket.dispatch(url, auth=self.bitbucket.auth)
 
     def create(self, repo_name, scm='git', private=True, **kwargs):
         """ Creates a new repository on own Bitbucket account and return it."""
         url = self.bitbucket.url('CREATE_REPO')
-        return self.bitbucket.dispatch('POST', url, auth=self.bitbucket.auth, name=repo_name, scm=scm, is_private=private, **kwargs)
+        return self.bitbucket.dispatch(url, 'POST', auth=self.bitbucket.auth, name=repo_name, scm=scm, is_private=private, **kwargs)
 
     def update(self, repo_slug=None, **kwargs):
         """ Updates repository on own Bitbucket account and return it."""
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
         url = self.bitbucket.url('UPDATE_REPO', username=self.bitbucket.username, repo_slug=repo_slug)
-        return self.bitbucket.dispatch('PUT', url, auth=self.bitbucket.auth, **kwargs)
+        return self.bitbucket.dispatch(url, 'PUT', auth=self.bitbucket.auth, **kwargs)
 
     def delete(self, repo_slug=None):
         """ Delete a repository on own Bitbucket account.
@@ -93,7 +89,7 @@ class Repository(object):
         """
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
         url = self.bitbucket.url('DELETE_REPO', username=self.bitbucket.username, repo_slug=repo_slug)
-        return self.bitbucket.dispatch('DELETE', url, auth=self.bitbucket.auth)
+        return self.bitbucket.dispatch(url, 'DELETE', auth=self.bitbucket.auth)
 
     def archive(self, repo_slug=None, format='zip', prefix=''):
         """ Get one of your repositories and compress it as an archive.
@@ -110,5 +106,5 @@ class Repository(object):
                         with NamedTemporaryFile(delete=False) as temp_file:
                             temp_file.write(file.encode('utf-8'))
                         zip_archive.write(temp_file.name, prefix + name)
-            return (True, archive.name)
-        return (False, 'Could not archive your project.')
+            return archive.name
+        return exceptions.BitbucketError('Could not archive your project.')

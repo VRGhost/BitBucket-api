@@ -1,25 +1,24 @@
 # -*- coding: utf-8 -*-
 from issue_comment import IssueComment
 
+from . import base
 
-URLS = {
-    # Issues
-    'GET_ISSUES': 'repositories/%(username)s/%(repo_slug)s/issues/',
-    'GET_ISSUE':  'repositories/%(username)s/%(repo_slug)s/issues/%(issue_id)s/',
-    'CREATE_ISSUE': 'repositories/%(username)s/%(repo_slug)s/issues/',
-    'UPDATE_ISSUE': 'repositories/%(username)s/%(repo_slug)s/issues/%(issue_id)s/',
-    'DELETE_ISSUE': 'repositories/%(username)s/%(repo_slug)s/issues/%(issue_id)s/',
-}
-
-
-class Issue(object):
+class Issue(base.Endpoint):
     """ This class provide issue-related methods to Bitbucket objects."""
 
+    endpoints = {
+        # Issues
+        'GET_ISSUES': 'repositories/%(username)s/%(repo_slug)s/issues/',
+        'GET_ISSUE':  'repositories/%(username)s/%(repo_slug)s/issues/%(issue_id)s/',
+        'CREATE_ISSUE': 'repositories/%(username)s/%(repo_slug)s/issues/',
+        'UPDATE_ISSUE': 'repositories/%(username)s/%(repo_slug)s/issues/%(issue_id)s/',
+        'DELETE_ISSUE': 'repositories/%(username)s/%(repo_slug)s/issues/%(issue_id)s/',
+    }
+
     def __init__(self, bitbucket, issue_id=None):
-        self.bitbucket = bitbucket
-        self.bitbucket.URLS.update(URLS)
+        super(Issue, self).__init__(bitbucket)
         self.issue_id = issue_id
-        self.comment = IssueComment(self)
+        self.comment = IssueComment(bitbucket, self)
 
     @property
     def issue_id(self):
@@ -42,14 +41,14 @@ class Issue(object):
         """
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
         url = self.bitbucket.url('GET_ISSUES', username=self.bitbucket.username, repo_slug=repo_slug)
-        return self.bitbucket.dispatch('GET', url, auth=self.bitbucket.auth, params=params)
+        return self.bitbucket.dispatch(url, auth=self.bitbucket.auth, params=params)
 
     def get(self, issue_id, repo_slug=None):
         """ Get an issue from one of your repositories.
         """
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
         url = self.bitbucket.url('GET_ISSUE', username=self.bitbucket.username, repo_slug=repo_slug, issue_id=issue_id)
-        return self.bitbucket.dispatch('GET', url, auth=self.bitbucket.auth)
+        return self.bitbucket.dispatch(url, auth=self.bitbucket.auth)
 
     def create(self, repo_slug=None, **kwargs):
         """
@@ -69,7 +68,7 @@ class Issue(object):
         """
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
         url = self.bitbucket.url('CREATE_ISSUE', username=self.bitbucket.username, repo_slug=repo_slug)
-        return self.bitbucket.dispatch('POST', url, auth=self.bitbucket.auth, **kwargs)
+        return self.bitbucket.dispatch(url, method='POST', auth=self.bitbucket.auth, **kwargs)
 
     def update(self, issue_id, repo_slug=None, **kwargs):
         """
@@ -89,11 +88,11 @@ class Issue(object):
         """
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
         url = self.bitbucket.url('UPDATE_ISSUE', username=self.bitbucket.username, repo_slug=repo_slug, issue_id=issue_id)
-        return self.bitbucket.dispatch('PUT', url, auth=self.bitbucket.auth, **kwargs)
+        return self.bitbucket.dispatch(url, 'PUT', auth=self.bitbucket.auth, **kwargs)
 
     def delete(self, issue_id, repo_slug=None):
         """ Delete an issue from one of your repositories.
         """
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
         url = self.bitbucket.url('DELETE_ISSUE', username=self.bitbucket.username, repo_slug=repo_slug, issue_id=issue_id)
-        return self.bitbucket.dispatch('DELETE', url, auth=self.bitbucket.auth)
+        return self.bitbucket.dispatch(url, 'DELETE', auth=self.bitbucket.auth)

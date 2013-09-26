@@ -11,164 +11,91 @@ from requests import Request, Session
 from requests_oauthlib import OAuth1
 import requests
 
-from issue import Issue
-from repository import Repository
-from service import Service
-from ssh import SSH
-
-
-#  ========
-#  = URLs =
-#  ========
-URLS = {
-    'BASE': 'https://bitbucket.org/!api/1.0/%s',
-    # Get user profile and repos
-    'GET_USER': 'users/%(username)s/',
-    # Search repo
-    # 'SEARCH_REPO': 'repositories/?name=%(search)s',
-    # Get tags & branches
-    'GET_TAGS': 'repositories/%(username)s/%(repo_slug)s/tags/',
-    'GET_BRANCHES': 'repositories/%(username)s/%(repo_slug)s/branches/',
-
-    'REQUEST_TOKEN': 'oauth/request_token/',
-    'AUTHENTICATE': 'oauth/authenticate?oauth_token=%(token)s',
-    'ACCESS_TOKEN': 'oauth/access_token/'
-}
-
+from . import (
+    base,
+    exceptions,
+    issue,
+    repository,
+    service,
+    ssh,
+    user,
+)
 
 class Bitbucket(object):
     """ This class lets you interact with the bitbucket public API. """
-    def __init__(self, username='', password='', repo_name_or_slug=''):
-        self.username = username
-        self.password = password
-        self.repo_slug = repo_name_or_slug
-        self.repo_tree = {}
-        self.URLS = URLS
 
-        self.repository = Repository(self)
-        self.service = Service(self)
-        self.ssh = SSH(self)
-        self.issue = Issue(self)
+    access_token = access_token_secret = None
 
-        self.access_token = None
-        self.access_token_secret = None
-        self.consumer_key = None
-        self.consumer_secret = None
+    urls = base.URLs({
+        # Get user profile and repos
+        'GET_USER': 'users/%(username)s/',
+        # Search repo
+        # 'SEARCH_REPO': 'repositories/?name=%(search)s',
+        # Get tags & branches
+        'GET_TAGS': 'repositories/%(username)s/%(repo_slug)s/tags/',
+        'GET_BRANCHES': 'repositories/%(username)s/%(repo_slug)s/branches/',
+
+        'REQUEST_TOKEN': 'oauth/request_token/',
+        'ACCESS_TOKEN': 'oauth/access_token/'
+    })
+
+    def __init__(self, consumer_key, consumer_secret):
+        super(Bitbucket, self).__init__()
+        self.consumer_key = consumer_key
+        self.consumer_secret = consumer_secret
+
+        self.repository = repository.Repository(self)
+        self.service = service.Service(self)
+        self.ssh = ssh.SSH(self)
+        self.issue = issue.Issue(self)
+        self.users = user.Accessor(self)
         self.oauth = None
-
-    #  ===================
-    #  = Getters/Setters =
-    #  ===================
-
-    @property
-    def auth(self):
-        """ Return credentials for current Bitbucket user. """
-        if self.oauth:
-            return self.oauth
-        return (self.username, self.password)
-
-    @property
-    def username(self):
-        """Return your repository's username."""
-        return self._username
-
-    @username.setter
-    def username(self, value):
-        if isinstance(value, basestring):
-            self._username = unicode(value)
-        if value is None:
-            self._username = None
-
-    @username.deleter
-    def username(self):
-        del self._username
-
-    @property
-    def password(self):
-        """Return your repository's password."""
-        return self._password
-
-    @password.setter
-    def password(self, value):
-        if isinstance(value, basestring):
-            self._password = unicode(value)
-        if value is None:
-            self._password = None
-
-    @password.deleter
-    def password(self):
-        del self._password
-
-    @property
-    def repo_slug(self):
-        """Return your repository's slug name."""
-        return self._repo_slug
-
-    @repo_slug.setter
-    def repo_slug(self, value):
-        if value is None:
-            self._repo_slug = None
-        else:
-            if isinstance(value, basestring):
-                value = unicode(value)
-            value = value.lower()
-            self._repo_slug = re.sub(r'[^a-z0-9_-]+', '-', value)
-
-    @repo_slug.deleter
-    def repo_slug(self):
-        del self._repo_slug
 
     #  ========================
     #  = Oauth authentication =
     #  ========================
 
-    def authorize(self, consumer_key, consumer_secret, callback_url=None, access_token=None, access_token_secret=None):
+    def authorize(self, callback_url):
         """ Call this with your consumer key, secret and callback URL, to generate a token for verification. """
-        self.consumer_key = consumer_key
-        self.consumer_secret = consumer_secret
+        if not callback_url:
+            return exceptions.BitbucketError("Callback URL required")
 
-        if not access_token and not access_token_secret:
-            if not callback_url:
-                return (False, "Callback URL required")
-            oauth = OAuth1(
-                consumer_key,
-                client_secret=consumer_secret,
-                callback_uri=callback_url)
-            r = requests.post(self.url('REQUEST_TOKEN'), auth=oauth)
-            if r.status_code == 200:
-                creds = parse_qs(r.content)
+        oauth = OAuth1(
+            self.consumer_key,
+            client_secret=self.consumer_secret,
+            callback_uri=callback_url
+        )
+        r = requests.post(self.urls('REQUEST_TOKEN'), auth=oauth)
+        if r.status_code != 200:
+            raise exceptions.AuthError(r.content)
+        creds = parse_qs(r.content)
 
-                self.access_token = creds.get('oauth_token')[0]
-                self.access_token_secret = creds.get('oauth_token_secret')[0]
-            else:
-                return (False, r.content)
-        else:
-            self.finalize_oauth(access_token, access_token_secret)
+        self.access_token = creds.get('oauth_token')[0]
+        self.access_token_secret = creds.get('oauth_token_secret')[0]
 
-        return (True, None)
+        return (self.access_token, self.access_token_secret)
 
-    def verify(self, verifier, consumer_key=None, consumer_secret=None, access_token=None, access_token_secret=None):
+    def verify(self, verifier, access_token=None, access_token_secret=None):
         """ After converting the token into verifier, call this to finalize the authorization. """
-        # Stored values can be supplied to verify
-        self.consumer_key = consumer_key or self.consumer_key
-        self.consumer_secret = consumer_secret or self.consumer_secret
-        self.access_token = access_token or self.access_token
-        self.access_token_secret = access_token_secret or self.access_token_secret
+        if access_token:
+            self.access_token = access_token
+        if access_token_secret:
+            self.access_token_secret = access_token_secret
 
+        # Stored values can be supplied to verify
         oauth = OAuth1(
             self.consumer_key,
             client_secret=self.consumer_secret,
             resource_owner_key=self.access_token,
             resource_owner_secret=self.access_token_secret,
-            verifier=verifier)
-        r = requests.post(self.url('ACCESS_TOKEN'), auth=oauth)
-        if r.status_code == 200:
-            creds = parse_qs(r.content)
-        else:
-            return (False, r.content)
+            verifier=verifier
+        )
+        r = requests.post(self.urls('ACCESS_TOKEN'), auth=oauth)
+        if r.status_code != 200:
+            raise exceptions.AuthError(r.content)
 
+        creds = parse_qs(r.content)
         self.finalize_oauth(creds.get('oauth_token')[0], creds.get('oauth_token_secret')[0])
-        return (True, None)
 
     def finalize_oauth(self, access_token, access_token_secret):
         """ Called internally once auth process is complete. """
@@ -180,21 +107,24 @@ class Bitbucket(object):
             self.consumer_key,
             client_secret=self.consumer_secret,
             resource_owner_key=self.access_token,
-            resource_owner_secret=self.access_token_secret)
+            resource_owner_secret=self.access_token_secret
+        )
 
     #  ======================
     #  = High lvl functions =
     #  ======================
 
-    def dispatch(self, method, url, auth=None, params=None, **kwargs):
+    def dispatch(self, url, method="GET", params=None, parse=True, **kwargs):
         """ Send HTTP request, with given method,
             credentials and data to the given URL,
             and return the success and the result on success.
         """
+        assert self.oauth, "Must be autorised."
+        
         r = Request(
             method=method,
             url=url,
-            auth=auth,
+            auth=self.oauth,
             params=params,
             data=kwargs)
         s = Session()
@@ -202,57 +132,20 @@ class Bitbucket(object):
         status = resp.status_code
         text = resp.text
         error = resp.reason
+        print (text, error)
         if status >= 200 and status < 300:
-            if text:
-                try:
-                    return (True, json.loads(text))
-                except TypeError:
-                    pass
-                except ValueError:
-                    pass
-            return (True, text)
+            if parse:
+                return json.loads(text)
+            else:
+                return text
         elif status >= 300 and status < 400:
-            return (
-                False,
-                'Unauthorized access, '
-                'please check your credentials.')
+            raise exceptions.DispatchError(
+                'Unauthorized access, please check your credentials.',
+                url, error, status
+            )
         elif status >= 400 and status < 500:
-            return (False, 'Service not found.')
+            raise exceptions.DispatchError('Service not found.', url, error, status)
         elif status >= 500 and status < 600:
-                return (False, 'Server error.')
+            raise exceptions.DispatchError('Server error.', url, error, status)
         else:
-            return (False, error)
-
-    def url(self, action, **kwargs):
-        """ Construct and return the URL for a specific API service. """
-        # TODO : should be static method ?
-        return self.URLS['BASE'] % self.URLS[action] % kwargs
-
-    #  =====================
-    #  = General functions =
-    #  =====================
-
-    def get_user(self, username=None):
-        """ Returns user informations.
-            If username is not defined, tries to return own informations.
-        """
-        username = username or self.username or ''
-        url = self.url('GET_USER', username=username)
-        response = self.dispatch('GET', url)
-        try:
-            return (response[0], response[1]['user'])
-        except TypeError:
-            pass
-        return response
-
-    def get_tags(self, repo_slug=None):
-        """ Get a single repository on Bitbucket and return its tags."""
-        repo_slug = repo_slug or self.repo_slug or ''
-        url = self.url('GET_TAGS', username=self.username, repo_slug=repo_slug)
-        return self.dispatch('GET', url, auth=self.auth)
-
-    def get_branches(self, repo_slug=None):
-        """ Get a single repository on Bitbucket and return its branches."""
-        repo_slug = repo_slug or self.repo_slug or ''
-        url = self.url('GET_BRANCHES', username=self.username, repo_slug=repo_slug)
-        return self.dispatch('GET', url, auth=self.auth)
+            raise exceptions.DispatchError(error, url, error, status)
