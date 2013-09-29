@@ -41,14 +41,14 @@ class Issue(base.Endpoint):
         """
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
         url = self.bitbucket.url('GET_ISSUES', username=self.bitbucket.username, repo_slug=repo_slug)
-        return self.bitbucket.dispatch(url, auth=self.bitbucket.auth, params=params)
+        return self.bitbucket.dispatch(url, params=params)
 
     def get(self, issue_id, repo_slug=None):
         """ Get an issue from one of your repositories.
         """
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
         url = self.bitbucket.url('GET_ISSUE', username=self.bitbucket.username, repo_slug=repo_slug, issue_id=issue_id)
-        return self.bitbucket.dispatch(url, auth=self.bitbucket.auth)
+        return self.bitbucket.dispatch(url)
 
     def create(self, repo_slug=None, **kwargs):
         """
@@ -68,7 +68,7 @@ class Issue(base.Endpoint):
         """
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
         url = self.bitbucket.url('CREATE_ISSUE', username=self.bitbucket.username, repo_slug=repo_slug)
-        return self.bitbucket.dispatch(url, method='POST', auth=self.bitbucket.auth, **kwargs)
+        return self.bitbucket.dispatch.post(url, data=kwargs)
 
     def update(self, issue_id, repo_slug=None, **kwargs):
         """
@@ -88,11 +88,11 @@ class Issue(base.Endpoint):
         """
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
         url = self.bitbucket.url('UPDATE_ISSUE', username=self.bitbucket.username, repo_slug=repo_slug, issue_id=issue_id)
-        return self.bitbucket.dispatch(url, 'PUT', auth=self.bitbucket.auth, **kwargs)
+        return self.bitbucket.dispatch.put(url, data=kwargs)
 
     def delete(self, issue_id, repo_slug=None):
         """ Delete an issue from one of your repositories.
         """
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
         url = self.bitbucket.url('DELETE_ISSUE', username=self.bitbucket.username, repo_slug=repo_slug, issue_id=issue_id)
-        return self.bitbucket.dispatch(url, 'DELETE', auth=self.bitbucket.auth)
+        return self.bitbucket.dispatch.delete(url)

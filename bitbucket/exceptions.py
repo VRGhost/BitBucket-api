@@ -7,7 +7,9 @@ class AuthError(BitbucketError):
 class DispatchError(AuthError):
 
     def __init__(self, msg, url, reason, code):
-        super(DispatchError, self).__init__("%s (url=%r code=%s reason=%r)" % (msg, url, code, reason))
+        super(DispatchError, self).__init__("Error accessing %r:: return code: %s; reason: %r; message: %r." % (
+            url, code, reason, msg
+        ))
         self.msg = msg
         self.code = code
         self.url = url

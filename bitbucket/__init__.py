@@ -75,5 +75,5 @@ Various usages : ::
 
 """
 
-from .bitbucket import Bitbucket
+from .bitbucket import BitbucketOAuth, BitbucketLoginPass
 from . import exceptions

@@ -25,7 +25,7 @@ class Repository(base.Endpoint):
             repo_slug=repo_slug,
             format='src')
         dir_url = url + dir
-        response = self.bitbucket.dispatch(dir_url, auth=self.bitbucket.auth)
+        response = self.bitbucket.dispatch(dir_url)
         if response[0] and isinstance(response[1], dict):
             repo_tree = response[1]
             url = self.bitbucket.url(
@@ -36,7 +36,7 @@ class Repository(base.Endpoint):
             # Download all files in dir
             for file in repo_tree['files']:
                 file_url = url + '/'.join((file['path'],))
-                response = self.bitbucket.dispatch('GET', file_url, auth=self.bitbucket.auth)
+                response = self.bitbucket.dispatch(file_url)
                 self.bitbucket.repo_tree[file['path']] = response[1]
             # recursively download in dirs
             for directory in repo_tree['directories']:
@@ -48,7 +48,7 @@ class Repository(base.Endpoint):
             If username is not defined, tries to return own public repos.
         """
         username = username or self.bitbucket.username or ''
-        url = self.bitbucket.url('GET_USER', username=username)
+        url = self.bitbucket.url('GET_USER', data=dict(username=username))
         response = self.bitbucket.dispatch(url)
         try:
             return (response[0], response[1]['repositories'])
@@ -59,7 +59,7 @@ class Repository(base.Endpoint):
     def all(self):
         """ Return own repositories."""
         url = self.bitbucket.url('GET_USER', username=self.bitbucket.username)
-        response = self.bitbucket.dispatch(url, auth=self.bitbucket.auth)
+        response = self.bitbucket.dispatch(url)
         try:
             return (response[0], response[1]['repositories'])
         except TypeError:
@@ -70,18 +70,20 @@ class Repository(base.Endpoint):
         """ Get a single repository on Bitbucket and return it."""
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
         url = self.bitbucket.url('GET_REPO', username=self.bitbucket.username, repo_slug=repo_slug)
-        return self.bitbucket.dispatch(url, auth=self.bitbucket.auth)
+        return self.bitbucket.dispatch(url)
 
     def create(self, repo_name, scm='git', private=True, **kwargs):
         """ Creates a new repository on own Bitbucket account and return it."""
         url = self.bitbucket.url('CREATE_REPO')
-        return self.bitbucket.dispatch(url, 'POST', auth=self.bitbucket.auth, name=repo_name, scm=scm, is_private=private, **kwargs)
+        return self.bitbucket.dispatch.post(url,
+            data=dict(name=repo_name, scm=scm, is_private=private, **kwargs),
+        )
 
     def update(self, repo_slug=None, **kwargs):
         """ Updates repository on own Bitbucket account and return it."""
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
         url = self.bitbucket.url('UPDATE_REPO', username=self.bitbucket.username, repo_slug=repo_slug)
-        return self.bitbucket.dispatch(url, 'PUT', auth=self.bitbucket.auth, **kwargs)
+        return self.bitbucket.dispatch.put(url, data=kwargs)
 
     def delete(self, repo_slug=None):
         """ Delete a repository on own Bitbucket account.
@@ -89,7 +91,7 @@ class Repository(base.Endpoint):
         """
         repo_slug = repo_slug or self.bitbucket.repo_slug or ''
         url = self.bitbucket.url('DELETE_REPO', username=self.bitbucket.username, repo_slug=repo_slug)
-        return self.bitbucket.dispatch(url, 'DELETE', auth=self.bitbucket.auth)
+        return self.bitbucket.dispatch.delete(url)
 
     def archive(self, repo_slug=None, format='zip', prefix=''):
         """ Get one of your repositories and compress it as an archive.
