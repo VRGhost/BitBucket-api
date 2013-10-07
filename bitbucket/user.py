@@ -2,7 +2,7 @@ import functools
 
 from . import base
 
-def cachedProp(func):
+def cached(func):
 
     attrName = "_cache_for_%r_%i".format(func.__name__, id(func))
     @functools.wraps(func)
@@ -14,7 +14,7 @@ def cachedProp(func):
             self.__dict__[attrName] = rv
             return rv
 
-    return property(_wrapper)
+    return _wrapper
 
 class SelfUser(base.Endpoint):
 
@@ -49,14 +49,15 @@ class SelfUser(base.Endpoint):
         """Update user params."""
         return self.bitbucket.dispatch.put(self.urls("REPOS_DASHBOARD"), data=kwargs)
 
-    @cachedProp
+    @property
+    @cached
     def username(self):
         return self.profile()["user"]["username"]
 
 class OtherUser(base.Endpoint):
 
     username = None
-    
+
     def __init__(self, bitbucket, username):
         super(OtherUser, self).__init__(bitbucket)
         self.username = username

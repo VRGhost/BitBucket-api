@@ -28,7 +28,7 @@ class BitbucketBase(object):
     def __init__(self):
         super(BitbucketBase, self).__init__()
         self.dispatch = dispatch.Dispatch(self)
-        
+
         self.repository = repository.Repository(self)
         self.service = service.Service(self)
         self.ssh = ssh.SSH(self)
@@ -42,7 +42,7 @@ class BitbucketBase(object):
 
 
 class BitbucketOAuth(BitbucketBase):
-    
+
     access_token = access_token_secret = None
 
     urls = base.URLs({
@@ -75,19 +75,14 @@ class BitbucketOAuth(BitbucketBase):
 
         return (self.access_token, self.access_token_secret)
 
-    def verify(self, verifier, access_token=None, access_token_secret=None):
+    def verify(self, verifier, access_token, access_token_secret):
         """ After converting the token into verifier, call this to finalize the authorization. """
-        if access_token:
-            self.access_token = access_token
-        if access_token_secret:
-            self.access_token_secret = access_token_secret
-
         # Stored values can be supplied to verify
         oauth = OAuth1(
             self.consumer_key,
             client_secret=self.consumer_secret,
-            resource_owner_key=self.access_token,
-            resource_owner_secret=self.access_token_secret,
+            resource_owner_key=access_token,
+            resource_owner_secret=access_token_secret,
             verifier=verifier
         )
         r = requests.post(self.urls('ACCESS_TOKEN'), auth=oauth)
@@ -95,23 +90,23 @@ class BitbucketOAuth(BitbucketBase):
             raise exceptions.AuthError(r.content)
 
         creds = parse_qs(r.content)
-        self.finalize_oauth(creds.get('oauth_token')[0], creds.get('oauth_token_secret')[0])
+        token = creds.get('oauth_token')[0]
+        secret = creds.get('oauth_token_secret')[0]
+        self.login(token, secret)
+        return (token, secret)
 
-    def finalize_oauth(self, access_token, access_token_secret):
+    def login(self, access_token, access_token_secret):
         """ Called internally once auth process is complete. """
-        self.access_token = access_token
-        self.access_token_secret = access_token_secret
-
         # Final OAuth object
         self.auth = OAuth1(
             self.consumer_key,
             client_secret=self.consumer_secret,
-            resource_owner_key=self.access_token,
-            resource_owner_secret=self.access_token_secret
+            resource_owner_key=access_token,
+            resource_owner_secret=access_token_secret
         )
 
 class BitbucketLoginPass(BitbucketBase):
-    
+
     def __init__(self, login, password):
         super(BitbucketLoginPass, self).__init__()
         self.auth = (login, password)
